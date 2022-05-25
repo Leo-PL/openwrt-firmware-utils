@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <arpa/inet.h>
 #include "md5.h"
 
 #define BUF_SIZE                0x200
@@ -66,7 +67,60 @@ static int md5_file(const char *filename, uint8_t *dst)
         return 0;
 }
 
+typedef struct __attribute__((packed)) ruckus_fw_header_v3 {
+	uint8_t header_magic[4];
+	uint32_t next_image_offset;
+	uint16_t header_len;
+	uint8_t compression_type[2];
+	uint32_t entry_point;
+	uint32_t data_size;
+	uint32_t timestamp;
+	uint8_t md5sum[16];
+	uint16_t header_version;
+	uint16_t header_checksum;
+	uint8_t version[16];
+	uint8_t architecture;
+	uint8_t chipset;
+	uint8_t padding_1[34];
+	uint8_t product[6];
+	uint8_t padding_2[6];
+	uint8_t version_2[16];
+	uint32_t board_class;
+	uint32_t load_address;
+	uint8_t padding_3[28];
+};
+
+
 int write_header(FILE *out, char* md5sum){
+	struct ruckus_fw_header_v3 header = {
+		.header_magic = "RCKS",
+		.next_image_offset = htonl(0x130000),
+		.header_len = htons(0xE0),
+		.compression_type = "l7",
+		.entry_point = htonl(0x80060000),
+		.data_size = htonl(data_size),
+		.timestamp = htonl(0x609a43d2),
+		.header_version = htons(3),
+		.header_checksum = htons(0x67bb),
+		.version = "OPENWRT123456789",
+		.architecture = 1,
+		.chipset = 1,
+		.padding_1 = { 0 },
+		.product = "zf7752",
+	        .padding_2 = { 0 },
+		.version_2 = "OPENWRT123456789",
+		.board_class = htonl(3),
+		.load_address = htonl(0x80060000),
+		.padding_3 = { 0 }
+	};
+
+	memcpy(header.md5sum, md5sum, sizeof(header.md5sum));
+
+	if (!fwrite(&header, sizeof(header), 1, out)) {
+		fprintf(stderr, "fwrite error\n");
+		return EXIT_FAILURE;
+	}
+	/*
 	// lzma kernel offset is ruckus header + uimage header = 160 + 64 = 224 = 0xE0
 	char header1[12] = {
 		0x52, 0x43, 0x4b, 0x53, 0x00, 0x13, 0x00, 0x00, 0x00, 0xe0, 0x6c, 0x37 };
@@ -80,7 +134,7 @@ int write_header(FILE *out, char* md5sum){
 		0x39, 0x17, 0x73, 0x56, 0xed, 0x87, 0x33, 0x9a, 0xe3, 0xe4, 0xff, 0xc9,
 		0xee, 0xcd, 0xd2, 0x9c };
 	char header2[4] = {
-		0x00, 0x04, 0x66, 0x69 };
+		0x00, 0x03, 0x08, 0x9A };
 	//200.7.10.202.9 - OPENWRT12345678
 	char fake_version[16] = {
 		0x4f, 0x50, 0x45, 0x4e, 0x57, 0x52, 0x54, 0x31, 0x32, 0x33, 0x34, 0x35, 
@@ -161,7 +215,7 @@ int write_header(FILE *out, char* md5sum){
 		fprintf(stderr, "fwrite error\n");
 		return EXIT_FAILURE;
 	}
-	
+	*/
 	return 0;
 }
 
